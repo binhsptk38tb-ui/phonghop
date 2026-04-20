@@ -13,7 +13,8 @@ import {
   getDocs, 
   query, 
   where,
-  serverTimestamp 
+  serverTimestamp,
+  deleteDoc
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile, UserRole } from '../types';
@@ -88,19 +89,20 @@ export const userService = {
 
   getAllUsers: async () => {
     const querySnapshot = await getDocs(collection(db, 'users'));
-    return querySnapshot.docs.map(doc => doc.data() as UserProfile);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserProfile));
   },
 
-  registerUser: async (email: string, name: string, role: UserRole) => {
-    // We use a temporary ID or email as key for pre-registration
-    // But since rule uses UID, we'll store in users with some identifier
-    // For simplicity, we just add a document to 'users' with email as ID or random
-    // and let the login logic link it.
+  deleteUser: async (uid: string) => {
+    return deleteDoc(doc(db, 'users', uid));
+  },
+
+  registerUser: async (email: string, name: string, role: UserRole, phoneNumber?: string) => {
     const userRef = doc(collection(db, 'users'));
     return setDoc(userRef, {
       email,
       name,
       role,
+      phoneNumber: phoneNumber || '',
       createdAt: serverTimestamp()
     });
   }

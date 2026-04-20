@@ -58,6 +58,7 @@ service cloud.firestore {
       );
       allow update: if (isAdmin() && isValidUser(request.resource.data)) || 
                    (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+      allow delete: if isAdmin();
     }
 
     match /meetings/{meetingId} {

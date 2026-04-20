@@ -600,6 +600,15 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
               
               <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl mb-6">
                 <button 
+                  onClick={() => setNewDoc({...newDoc, type: 'link'})}
+                  className={cn(
+                    "flex-1 py-2 text-xs font-bold rounded-xl transition-all",
+                    newDoc.type === 'link' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  Dán đường dẫn (Khuyên dùng)
+                </button>
+                <button 
                   onClick={() => setNewDoc({...newDoc, type: 'file'})}
                   className={cn(
                     "flex-1 py-2 text-xs font-bold rounded-xl transition-all",
@@ -608,16 +617,17 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                 >
                   Tải từ máy tính
                 </button>
-                <button 
-                  onClick={() => setNewDoc({...newDoc, type: 'link'})}
-                  className={cn(
-                    "flex-1 py-2 text-xs font-bold rounded-xl transition-all",
-                    newDoc.type === 'link' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  )}
-                >
-                  Dán đường dẫn
-                </button>
               </div>
+
+              {newDoc.type === 'file' && (
+                <div className="mb-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl">
+                  <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
+                    ⚠️ <strong>Chú ý:</strong> Nếu vạch tải lên bị đứng ở 0%, nghĩa là máy chủ Google Cloud của bạn yêu cầu xác minh thanh toán mới cho phép dùng ổ đĩa. 
+                    <br/><br/>
+                    <strong>Giải pháp:</strong> Hãy dùng tab <strong>"Dán đường dẫn"</strong> ở trên để chia sẻ tài liệu từ Google Drive của bạn.
+                  </p>
+                </div>
+              )}
 
               <form onSubmit={async (e) => {
                 e.preventDefault();

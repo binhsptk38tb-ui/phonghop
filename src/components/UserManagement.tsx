@@ -22,10 +22,13 @@ function cn(...inputs: any[]) {
 
 export default function UserManagement() {
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [newUser, setNewUser] = useState({
     email: '',
     name: '',
+    phoneNumber: '',
     role: 'teacher' as UserRole
   });
 
@@ -40,11 +43,28 @@ export default function UserManagement() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    await userService.registerUser(newUser.email, newUser.name, newUser.role);
+    await userService.registerUser(newUser.email, newUser.name, newUser.role, newUser.phoneNumber);
     setShowAddModal(false);
-    setNewUser({ email: '', name: '', role: 'teacher' });
+    setNewUser({ email: '', name: '', phoneNumber: '', role: 'teacher' });
     loadUsers();
   };
+
+  const confirmDelete = async () => {
+    if (userToDelete?.uid) {
+      try {
+        await userService.deleteUser(userToDelete.uid);
+        setUserToDelete(null);
+        loadUsers();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+      }
+    }
+  };
+
+  const filteredUsers = users.filter(u => 
+    u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    u.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const getRoleLabel = (role: string) => {
     switch (role) {
@@ -76,7 +96,13 @@ export default function UserManagement() {
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
           <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 w-80">
             <Search className="text-slate-400 h-4 w-4" />
-            <input type="text" placeholder="Tìm tên, email..." className="bg-transparent border-none outline-none text-sm font-medium w-full" />
+            <input 
+              type="text" 
+              placeholder="Tìm tên, email..." 
+              className="bg-transparent border-none outline-none text-sm font-medium w-full"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
           <button className="flex items-center gap-2 px-4 py-2 text-slate-500 font-bold text-sm hover:bg-slate-100 rounded-xl transition-all">
             <Filter size={16} /> Bộ lọc
@@ -87,17 +113,21 @@ export default function UserManagement() {
           <table className="w-full text-left">
             <thead className="sticky top-0 bg-white z-10">
               <tr className="border-b border-slate-100 italic">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Họ và Tên</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Email</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Chức vụ</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Ngày tạo</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Thao tác</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">#</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Họ và Tên</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Email / SĐT</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Chức vụ</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Ngày tạo</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {users.map(u => (
+              {filteredUsers.map((u, index) => (
                 <tr key={u.uid || u.email} className="group hover:bg-slate-50 transition-colors">
-                  <td className="px-8 py-4">
+                  <td className="px-6 py-4">
+                    <span className="text-xs font-bold text-slate-400">{index + 1}</span>
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold shadow-inner">
                         {u.name.charAt(0).toUpperCase()}
@@ -105,10 +135,13 @@ export default function UserManagement() {
                       <span className="font-bold text-slate-800">{u.name}</span>
                     </div>
                   </td>
-                  <td className="px-8 py-4">
-                    <span className="text-sm font-medium text-slate-500">{u.email}</span>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-slate-500">{u.email}</span>
+                      {u.phoneNumber && <span className="text-[10px] font-bold text-blue-500">{u.phoneNumber}</span>}
+                    </div>
                   </td>
-                  <td className="px-8 py-4">
+                  <td className="px-6 py-4">
                     <span className={cn(
                       "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
                       u.role === 'admin' ? "bg-red-50 text-red-600" :
@@ -118,13 +151,16 @@ export default function UserManagement() {
                       {getRoleLabel(u.role)}
                     </span>
                   </td>
-                  <td className="px-8 py-4">
+                  <td className="px-6 py-4">
                     <span className="text-sm font-medium text-slate-400">
                       {u.createdAt ? format(u.createdAt.toDate ? u.createdAt.toDate() : new Date(), 'dd/MM/yyyy') : 'N/A'}
                     </span>
                   </td>
-                  <td className="px-8 py-4 text-right">
-                    <button className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={() => setUserToDelete(u)}
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    >
                       <Trash2 size={18} />
                     </button>
                   </td>
@@ -183,6 +219,19 @@ export default function UserManagement() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Số điện thoại (tùy chọn)</label>
+                  <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs uppercase">SĐT</div>
+                    <input
+                      type="tel"
+                      placeholder="VD: 0912345678"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-14 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      value={newUser.phoneNumber}
+                      onChange={e => setNewUser({...newUser, phoneNumber: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Phân quyền</label>
                   <div className="relative">
                     <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
@@ -214,6 +263,50 @@ export default function UserManagement() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete User Modal */}
+      <AnimatePresence>
+        {userToDelete && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setUserToDelete(null)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-md" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-sm rounded-[2rem] bg-white shadow-2xl p-8 text-center"
+            >
+              <div className="mx-auto h-16 w-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-6">
+                <Trash2 size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Xác nhận xóa?</h3>
+              <p className="text-slate-500 text-sm mb-8">
+                Bạn có chắc chắn muốn xóa thành viên <br/>
+                <span className="font-bold text-slate-800">"{userToDelete.name}"</span> không?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setUserToDelete(null)}
+                  className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="flex-1 rounded-2xl bg-red-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-red-200 transition-all hover:bg-red-700"
+                >
+                  Xóa ngay
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
