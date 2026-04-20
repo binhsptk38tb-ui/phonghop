@@ -37,8 +37,6 @@ import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { motion, AnimatePresence } from 'motion/react';
 
 function cn(...inputs: any[]) {
@@ -125,44 +123,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   };
 
   const handleExportPDF = () => {
-    if (!meeting) return;
-    const doc = new jsPDF();
-    
-    // Check if we need to load a font for Vietnamese support. 
-    // Standard PDF fonts don't support Vietnamese well.
-    // In a real app we'd embed a Unicode font. For this demo, we'll use basic text.
-    
-    doc.setFontSize(20);
-    doc.text('BIEN BAN CUOC HOP', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(14);
-    doc.text(`Chu de: ${meeting.title}`, 20, 40);
-    doc.text(`Thoi gian: ${format(meeting.scheduledAt.toDate ? meeting.scheduledAt.toDate() : new Date(meeting.scheduledAt), 'dd/MM/yyyy HH:mm')}`, 20, 50);
-    doc.text(`Dia diem: ${meeting.location || 'N/A'}`, 20, 60);
-    
-    doc.text('Noi dung cuoc hop:', 20, 80);
-    doc.setFontSize(12);
-    const contentLines = doc.splitTextToSize(meeting.content || 'Chua co noi dung.', 170);
-    doc.text(contentLines, 20, 90);
-    
-    doc.setFontSize(14);
-    doc.text('Nghi quyet:', 20, 130);
-    doc.setFontSize(12);
-    const resLines = doc.splitTextToSize(meeting.resolution || 'Chua co nghi quyet.', 170);
-    doc.text(resLines, 20, 140);
-
-    // Tasks table
-    if (tasks.length > 0) {
-      doc.addPage();
-      doc.text('Danh sach nhiem vu:', 20, 20);
-      (doc as any).autoTable({
-        startY: 30,
-        head: [['Mo ta', 'Nguoi thuc hien', 'Trang thai']],
-        body: tasks.map(t => [t.description, t.assigneeName, t.status === 'completed' ? 'Hoan thanh' : 'Dang thuc hien']),
-      });
-    }
-
-    doc.save(`biên_bản_họp_${meetingId.slice(0, 8)}.pdf`);
+    window.print();
   };
 
   if (!meeting) return <div className="p-8 text-center text-slate-500 font-bold">Không tìm thấy dữ liệu cuộc họp...</div>;
@@ -178,7 +139,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   return (
     <div className="h-full flex flex-col gap-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6 no-print">
         <div className="flex items-center gap-4">
           <button 
             onClick={onBack}
@@ -233,7 +194,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
       </div>
 
       {/* Tabs Nav */}
-      <div className="flex gap-1 bg-slate-200/50 p-1.5 rounded-2xl w-fit">
+      <div className="flex gap-1 bg-slate-200/50 p-1.5 rounded-2xl w-fit no-print">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -252,7 +213,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 no-print">
         {activeTab === 'info' && (
           <div className="grid md:grid-cols-3 gap-6 h-full">
             <div className="md:col-span-2 space-y-6 flex flex-col">
@@ -823,6 +784,69 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
           </div>
         )}
       </AnimatePresence>
+
+      {/* Print Layout (Only visible when printing) */}
+      <div className="print-only font-serif text-black p-4">
+        <div className="flex justify-between items-start mb-8">
+          <div className="text-center">
+            <p className="font-bold text-sm uppercase">CƠ QUAN CHỦ QUẢN</p>
+            <p className="font-bold text-sm uppercase underline">TRƯỜNG HỌC CỦA BẠN</p>
+          </div>
+          <div className="text-center">
+            <p className="font-bold text-sm uppercase">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+            <p className="font-bold text-sm underline">Độc lập - Tự do - Hạnh phúc</p>
+          </div>
+        </div>
+
+        <div className="text-center mb-10">
+          <h1 className="text-2xl font-bold uppercase mb-2">BIÊN BẢN CUỘC HỌP</h1>
+          <p className="italic text-sm">V/v: {meeting.title}</p>
+        </div>
+
+        <div className="space-y-4 mb-8 text-sm">
+          <p><strong>Thời gian:</strong> {format(meeting.scheduledAt.toDate ? meeting.scheduledAt.toDate() : new Date(meeting.scheduledAt), 'HH:mm, dd/MM/yyyy')}</p>
+          <p><strong>Địa điểm:</strong> {meeting.location || 'Tại văn phòng'}</p>
+          <p><strong>Thành phần tham dự:</strong> {attendance.filter(a => a.status === 'present').map(a => a.userName).join(', ')}</p>
+          <p><strong>Vắng mặt:</strong> {attendance.filter(a => a.status !== 'present').map(a => `${a.userName} (${a.status})`).join(', ') || 'Không'}</p>
+        </div>
+
+        <div className="mb-8">
+          <h2 className="font-bold uppercase text-sm mb-2 underline">I. NỘI DUNG CUỘC HỌP</h2>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed text-justify">
+            {meeting.content || 'Chưa ghi nhận nội dung.'}
+          </div>
+        </div>
+
+        <div className="mb-8">
+          <h2 className="font-bold uppercase text-sm mb-2 underline">II. Ý KIẾN THẢO LUẬN</h2>
+          <div className="space-y-2">
+            {opinions.map((op, idx) => (
+              <div key={op.id} className="text-sm">
+                <span className="font-bold">- {op.userName}:</span> {op.content}
+              </div>
+            ))}
+            {opinions.length === 0 && <p className="text-sm italic">Không có ý kiến thảo luận ghi nhận.</p>}
+          </div>
+        </div>
+
+        <div className="mb-10">
+          <h2 className="font-bold uppercase text-sm mb-2 underline">III. KẾT LUẬN VÀ QUYẾT NGHỊ</h2>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed text-justify">
+            {meeting.resolution || 'Chưa ghi nhận kết luận.'}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-8 text-center mt-20">
+          <div>
+            <p className="font-bold uppercase mb-12">THƯ KÝ CUỘC HỌP</p>
+            <p className="italic text-xs text-slate-400">(Ký và ghi rõ họ tên)</p>
+          </div>
+          <div>
+            <p className="font-bold uppercase mb-12">CHỦ TỌA CUỘC HỌP</p>
+            <p className="italic text-xs text-slate-400">(Ký và ghi rõ họ tên)</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
