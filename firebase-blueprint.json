@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user with roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "management", "teacher", "staff"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "name"]
+    },
+    "Meeting": {
+      "title": "Meeting",
+      "description": "Meeting session data",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "scheduledAt": { "type": "string", "format": "date-time" },
+        "location": { "type": "string" },
+        "status": { "type": "string", "enum": ["upcoming", "ongoing", "completed"] },
+        "content": { "type": "string" },
+        "resolution": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "scheduledAt", "status", "createdBy"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "User attendance for a meeting",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "status": { "type": "string", "enum": ["present", "absent", "late", "excused"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "status"]
+    },
+    "Opinion": {
+      "title": "Opinion",
+      "description": "Participant feedback during meeting",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "content"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Assigned task from meeting",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "assigneeId": { "type": "string" },
+        "assigneeName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
+        "dueDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["description", "assigneeId", "status"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Uploaded files for meeting",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "url", "uploadedBy"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and roles"
+    },
+    "/meetings/{meetingId}": {
+      "schema": "Meeting",
+      "description": "Meeting master records"
+    },
+    "/meetings/{meetingId}/attendance/{userId}": {
+      "schema": "Attendance",
+      "description": "Attendance tracking"
+    },
+    "/meetings/{meetingId}/opinions/{opinionId}": {
+      "schema": "Opinion",
+      "description": "Meeting chatter/opinions"
+    },
+    "/meetings/{meetingId}/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Tasks generated in meeting"
+    },
+    "/meetings/{meetingId}/documents/{docId}": {
+      "schema": "Document",
+      "description": "Meeting resources"
+    }
+  }
+}
