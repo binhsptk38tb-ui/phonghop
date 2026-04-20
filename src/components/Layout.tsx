@@ -40,7 +40,10 @@ export default function Layout({ user, currentPage, onNavigate, onLogout, childr
             <GraduationCap size={28} />
           </div>
           <div>
-            <h1 className="font-extrabold text-slate-800 tracking-tight leading-tight">M-Meeting</h1>
+            <div className="flex items-center gap-1.5">
+              <h1 className="font-extrabold text-slate-800 tracking-tight leading-tight">M-Meeting</h1>
+              <span className="px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[8px] font-black uppercase tracking-tighter">V2.0</span>
+            </div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Paperless System</span>
           </div>
         </div>
@@ -78,7 +81,11 @@ export default function Layout({ user, currentPage, onNavigate, onLogout, childr
               <div className="overflow-hidden">
                 <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">
-                  {user.role === 'admin' ? 'Quản trị viên' : user.role === 'management' ? 'Ban giám hiệu' : user.role === 'teacher' ? 'Giáo viên' : 'Nhân viên'}
+                  {user.role === 'admin' ? 'Quản trị viên' : 
+                   user.role === 'management' ? 'Ban giám hiệu' : 
+                   user.role === 'chairperson' ? 'Chủ tọa' :
+                   user.role === 'secretary' ? 'Thư ký' :
+                   user.role === 'teacher' ? 'Giáo viên' : 'Nhân viên'}
                 </p>
               </div>
             </div>

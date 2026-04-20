@@ -72,6 +72,8 @@ export default function UserManagement() {
       case 'management': return 'BGH';
       case 'teacher': return 'Giáo viên';
       case 'staff': return 'Nhân viên';
+      case 'chairperson': return 'Chủ tọa';
+      case 'secretary': return 'Thư ký';
       default: return 'Khách';
     }
   };
@@ -146,6 +148,8 @@ export default function UserManagement() {
                       "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
                       u.role === 'admin' ? "bg-red-50 text-red-600" :
                       u.role === 'management' ? "bg-blue-50 text-blue-600" :
+                      u.role === 'chairperson' ? "bg-emerald-50 text-emerald-600" :
+                      u.role === 'secretary' ? "bg-amber-50 text-amber-600" :
                       "bg-slate-100 text-slate-600"
                     )}>
                       {getRoleLabel(u.role)}
@@ -235,16 +239,18 @@ export default function UserManagement() {
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Phân quyền</label>
                   <div className="relative">
                     <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
-                    <select
-                      className="w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                      value={newUser.role}
-                      onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}
-                    >
-                      <option value="management">Ban giám hiệu (CBQL)</option>
-                      <option value="teacher">Giáo viên</option>
-                      <option value="staff">Nhân viên</option>
-                      <option value="admin">Quản trị viên</option>
-                    </select>
+                      <select
+                        className="w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                        value={newUser.role}
+                        onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}
+                      >
+                        <option value="chairperson">Chủ tọa cuộc họp</option>
+                        <option value="secretary">Thư ký cuộc họp</option>
+                        <option value="management">Ban giám hiệu (CBQL)</option>
+                        <option value="teacher">Giáo viên</option>
+                        <option value="staff">Nhân viên</option>
+                        <option value="admin">Quản trị viên</option>
+                      </select>
                   </div>
                 </div>
                 <div className="flex gap-3 pt-4">

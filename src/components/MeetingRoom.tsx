@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { meetingService } from '../services/meetingService';
+import { userService } from '../services/userService';
 import { 
   Meeting, 
   UserProfile, 
@@ -58,6 +59,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   const [opinions, setOpinions] = useState<Opinion[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<MeetingDocument[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   
   const [opinionInput, setOpinionInput] = useState('');
   const [showAddDocModal, setShowAddDocModal] = useState(false);
@@ -65,6 +67,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewDoc, setPreviewDoc] = useState<MeetingDocument | null>(null);
+  const [isPrintPreview, setIsPrintPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -84,6 +87,9 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
     });
     const unsubTasks = meetingService.subscribeTasks(meetingId, setTasks);
     const unsubDocs = meetingService.subscribeDocuments(meetingId, setDocuments);
+    
+    // Load all users to identify roles
+    userService.getAllUsers().then(setAllUsers);
 
     return () => {
       unsubMeeting();
@@ -123,7 +129,106 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   };
 
   const handleExportPDF = () => {
-    window.print();
+    setIsPrintPreview(true);
+    // Vẫn gọi in, nếu bị chặn thì người dùng vẫn thấy bản Preview để tự in bằng Ctrl+P
+    setTimeout(() => {
+      window.print();
+    }, 500);
+  };
+
+  const handleExportWord = () => {
+    if (!meeting) return;
+    
+    const chairperson = allUsers.find(u => u.role === 'chairperson')?.name || '................................';
+    const secretary = allUsers.find(u => u.role === 'secretary')?.name || '................................';
+
+    // Mẫu HTML tinh gọn mà Word có thể đọc và cho phép sửa
+    const content = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+          <meta charset='utf-8'>
+          <title>Biên bản cuộc họp</title>
+          <style>
+            body { font-family: 'Times New Roman', serif; line-height: 1.5; }
+            .header-table { width: 100%; border: none; margin-bottom: 30px; }
+            .title { text-align: center; font-weight: bold; font-size: 16pt; margin: 20px 0; text-transform: uppercase; }
+            .section { font-weight: bold; text-decoration: underline; margin-top: 15px; text-transform: uppercase; }
+            .content { text-align: justify; white-space: pre-wrap; font-size: 13pt; }
+            .signature-table { width: 100%; border: none; margin-top: 50px; }
+          </style>
+        </head>
+        <body>
+          <table class="header-table">
+            <tr>
+              <td style="text-align: center; width: 40%; vertical-align: top;">
+                <p style="margin: 0;">CƠ QUAN CHỦ QUẢN</p>
+                <p style="margin: 0;"><b>TRƯỜNG HỌC CỦA BẠN</b></p>
+                <p style="margin: 0;"><u>Số: ...../BB-HĐ</u></p>
+              </td>
+              <td style="text-align: center; width: 60%; vertical-align: top;">
+                <p style="margin: 0;"><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b></p>
+                <p style="margin: 0;"><b><u>Độc lập - Tự do - Hạnh phúc</u></b></p>
+                <p style="margin: 0; font-style: italic;">............, ngày .... tháng .... năm 20...</p>
+              </td>
+            </tr>
+          </table>
+
+          <div class="title">BIÊN BẢN CUỘC HỌP</div>
+          <div style="text-align: center; font-style: italic; margin-bottom: 20px;">V/v: ${meeting.title}</div>
+
+          <p><b>1. Thời gian:</b> ${format(meeting.scheduledAt.toDate ? meeting.scheduledAt.toDate() : new Date(meeting.scheduledAt), 'HH:mm, dd/MM/yyyy')}</p>
+          <p><b>2. Địa điểm:</b> ${meeting.location || 'Tại văn phòng'}</p>
+          <p><b>3. Thành phần tham dự:</b></p>
+          <p style="margin-left: 30px;">- Có mặt: ${attendance.filter(a => a.status === 'present').map(a => a.userName).join(', ')}</p>
+          <p style="margin-left: 30px;">- Vắng mặt: ${attendance.filter(a => a.status !== 'present').map(a => `${a.userName} (${a.status})`).join(', ') || 'Không'}</p>
+          <p><b>4. Chủ tọa:</b> ${chairperson}</p>
+          <p><b>5. Thư ký:</b> ${secretary}</p>
+
+          <br/>
+          <div class="section">I. NỘI DUNG CUỘC HỌP</div>
+          <div class="content">${meeting.content || '........................................................................................................................................................................................................................'}</div>
+
+          <br/>
+          <div class="section">II. Ý KIẾN THẢO LUẬN</div>
+          <div class="content">
+            ${opinions.map(op => `<p style="margin: 5px 0;">- <b>${op.userName}:</b> ${op.content}</p>`).join('')}
+            ${opinions.length === 0 ? '<p>........................................................................................................................................................................................................................</p>' : ''}
+          </div>
+
+          <br/>
+          <div class="section">III. KẾT LUẬN VÀ QUYẾT NGHỊ</div>
+          <div class="content">${meeting.resolution || '........................................................................................................................................................................................................................'}</div>
+
+          <p style="margin-top: 30px;">Cuộc họp kết thúc vào hồi .... giờ .... ngày .... cùng tháng.</p>
+          <p>Biên bản đã được đọc cho các thành viên cùng nghe và nhất trí thông qua.</p>
+
+          <table class="signature-table">
+            <tr>
+              <td style="text-align: center; width: 50%;">
+                <p><b>THƯ KÝ CUỘC HỌP</b></p>
+                <br/><br/><br/>
+                <p><b>${secretary}</b></p>
+              </td>
+              <td style="text-align: center; width: 50%;">
+                <p><b>CHỦ TỌA CUỘC HỌP</b></p>
+                <br/><br/><br/>
+                <p><b>${chairperson}</b></p>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff', content], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bien_ban_hop_${meetingId.slice(0, 8)}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (!meeting) return <div className="p-8 text-center text-slate-500 font-bold">Không tìm thấy dữ liệu cuộc họp...</div>;
@@ -135,6 +240,103 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
     { id: 'tasks', label: 'Nhiệm vụ', icon: CheckSquare },
     { id: 'documents', label: 'Tài liệu', icon: Download },
   ];
+
+  if (isPrintPreview) {
+    const chairperson = allUsers.find(u => u.role === 'chairperson')?.name || '................................';
+    const secretary = allUsers.find(u => u.role === 'secretary')?.name || '................................';
+
+    return (
+      <div className="bg-white min-h-screen p-10 font-serif relative">
+        <button 
+          onClick={() => setIsPrintPreview(false)}
+          className="fixed top-5 left-5 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold no-print shadow-xl hover:bg-slate-900 transition-all z-[100] flex items-center gap-2"
+        >
+          <ArrowLeft size={16} /> Quay lại ứng dụng
+        </button>
+        
+        <div className="fixed top-5 right-5 no-print z-[100] bg-blue-50 border border-blue-200 p-3 rounded-xl max-w-xs shadow-lg">
+          <p className="text-xs text-blue-800 font-medium">
+            <strong>Mẹo:</strong> Nếu máy in không tự hiện ra, hãy nhấn <strong>Ctrl + P</strong> (hoặc Cmd + P) để lưu tệp PDF.
+          </p>
+        </div>
+
+        <div className="max-w-[21cm] mx-auto bg-white">
+          <div className="flex justify-between items-start mb-8">
+            <div className="text-center">
+              <p className="font-bold text-sm uppercase">CƠ QUAN CHỦ QUẢN</p>
+              <p className="font-bold text-sm uppercase underline">TRƯỜNG HỌC CỦA BẠN</p>
+              <p className="text-[10px] mt-1 italic">Số: ...../BB-HĐ</p>
+            </div>
+            <div className="text-center">
+              <p className="font-bold text-sm uppercase">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
+              <p className="font-bold text-sm underline">Độc lập - Tự do - Hạnh phúc</p>
+              <p className="text-[10px] mt-1">............, ngày .... tháng .... năm 20...</p>
+            </div>
+          </div>
+
+          <div className="text-center mb-10">
+            <h1 className="text-2xl font-bold uppercase mb-2">BIÊN BẢN CUỘC HỌP</h1>
+            <p className="italic text-sm">V/v: {meeting.title}</p>
+          </div>
+
+          <div className="space-y-4 mb-8 text-sm">
+            <p><strong>1. Thời gian:</strong> {format(meeting.scheduledAt.toDate ? meeting.scheduledAt.toDate() : new Date(meeting.scheduledAt), 'HH:mm, dd/MM/yyyy')}</p>
+            <p><strong>2. Địa điểm:</strong> {meeting.location || 'Tại văn phòng'}</p>
+            <p><strong>3. Thành phần tham dự:</strong> </p>
+            <div className="ml-5">
+              <p>- Tổng số: {attendance.filter(a => a.status === 'present').length} thành viên.</p>
+              <p>- Có mặt: {attendance.filter(a => a.status === 'present').map(a => a.userName).join(', ')}</p>
+              <p>- Vắng mặt: {attendance.filter(a => a.status !== 'present').map(a => `${a.userName} (${a.status})`).join(', ') || 'Không'}</p>
+            </div>
+            <p><strong>4. Chủ tọa:</strong> {chairperson}</p>
+            <p><strong>5. Thư ký:</strong> {secretary}</p>
+          </div>
+
+          <div className="mb-8">
+            <h2 className="font-bold uppercase text-sm mb-2 underline">I. NỘI DUNG CUỘC HỌP</h2>
+            <div className="whitespace-pre-wrap text-sm leading-relaxed text-justify px-4">
+              {meeting.content || '....................................................................................................................................................................................................................................................................................................................................................................................'}
+            </div>
+          </div>
+
+          <div className="mb-8">
+            <h2 className="font-bold uppercase text-sm mb-2 underline">II. Ý KIẾN THẢO LUẬN</h2>
+            <div className="space-y-3 px-4">
+              {opinions.map((op, idx) => (
+                <div key={op.id} className="text-sm">
+                  <span className="font-bold">- Ý kiến của {op.userName}:</span> {op.content}
+                </div>
+              ))}
+              {opinions.length === 0 && <p className="text-sm italic">........................................................................................................................................................................................................................................................................................................................................................</p>}
+            </div>
+          </div>
+
+          <div className="mb-10">
+            <h2 className="font-bold uppercase text-sm mb-2 underline">III. KẾT LUẬN VÀ QUYẾT NGHỊ</h2>
+            <div className="whitespace-pre-wrap text-sm leading-relaxed text-justify px-4">
+              {meeting.resolution || '....................................................................................................................................................................................................................................................................................................................................................................................'}
+            </div>
+          </div>
+
+          <div className="mb-10 text-sm">
+            <p>Cuộc họp kết thúc vào hồi .... giờ .... ngày .... cùng tháng.</p>
+            <p>Biên bản đã được đọc cho các thành viên cùng nghe và nhất trí thông qua.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8 text-center mt-20">
+            <div>
+              <p className="font-bold uppercase mb-16">THƯ KÝ CUỘC HỌP</p>
+              <p className="font-bold text-slate-800">{secretary}</p>
+            </div>
+            <div>
+              <p className="font-bold uppercase mb-16">CHỦ TỌA CUỘC HỌP</p>
+              <p className="font-bold text-slate-800">{chairperson}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col gap-6 max-w-6xl mx-auto">
@@ -149,14 +351,22 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
           </button>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className={cn(
-                "px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest",
-                meeting.status === 'ongoing' ? "bg-emerald-100 text-emerald-700" :
-                meeting.status === 'completed' ? "bg-slate-100 text-slate-600" :
-                "bg-blue-100 text-blue-700"
-              )}>
-                {meeting.status}
-              </span>
+              {meeting.status === 'ongoing' && (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest animate-pulse-soft">
+                  <div className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                  Đang diễn ra
+                </span>
+              )}
+              {meeting.status === 'completed' && (
+                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest">
+                  Đã kết thúc
+                </span>
+              )}
+              {meeting.status === 'upcoming' && (
+                <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest">
+                  Sắp diễn ra
+                </span>
+              )}
               <span className="text-xs font-bold text-slate-400">#{meetingId.slice(0, 8)}</span>
             </div>
             <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">{meeting.title}</h2>
@@ -184,6 +394,12 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
               )}
             </>
           )}
+          <button 
+            onClick={handleExportWord}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl text-sm font-bold hover:bg-blue-100 transition-all shadow-sm"
+          >
+            <Download size={18} /> Tải bản Word
+          </button>
           <button 
             onClick={handleExportPDF}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
@@ -600,31 +816,47 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                   
                   try {
                     setUploading(true);
-                    setUploadProgress(0);
+                    setUploadProgress(10);
                     console.log('Starting file upload for:', file.name);
                     
-                    // Thêm cơ chế timeout sau 15 giây nếu vẫn ở 0%
-                    const uploadTimeout = setTimeout(() => {
-                      if (uploading && uploadProgress === 0) {
-                        setUploading(false);
-                        alert('Quá thời gian kết nối với máy chủ lưu trữ. Vui lòng kiểm tra lại mạng hoặc sử dụng tính năng "Dán đường dẫn".');
+                    // Thử tải lên Firebase Storage
+                    try {
+                      const { url, storagePath } = await meetingService.uploadFile(
+                        meetingId, 
+                        file, 
+                        (pct) => setUploadProgress(Math.round(pct))
+                      );
+                      
+                      await meetingService.addDocument(meetingId, {
+                        name: newDoc.name || file.name,
+                        url,
+                        storagePath,
+                        uploadedBy: user.name
+                      });
+                    } catch (storageError) {
+                      console.warn('Firebase Storage blocked or failed. Using Smart Backup (Base64) for demo purposes.');
+                      
+                      // Backup: Nếu Storage lỗi, ta dùng Base64 cho file nhỏ (< 2MB)
+                      if (file.size > 2 * 1024 * 1024) {
+                        throw new Error('Dung lượng tệp quá lớn (>2MB). Vui lòng dùng tính năng "Dán đường dẫn" hoặc cấu hình Firebase Storage.');
                       }
-                    }, 15000);
 
-                    const { url, storagePath } = await meetingService.uploadFile(
-                      meetingId, 
-                      file, 
-                      (pct) => setUploadProgress(Math.round(pct))
-                    );
+                      const reader = new FileReader();
+                      const base64Promise = new Promise<string>((resolve) => {
+                        reader.onloadend = () => resolve(reader.result as string);
+                        reader.readAsDataURL(file);
+                      });
+
+                      const base64Url = await base64Promise;
+                      setUploadProgress(100);
+
+                      await meetingService.addDocument(meetingId, {
+                        name: newDoc.name || file.name,
+                        url: base64Url,
+                        uploadedBy: user.name
+                      });
+                    }
                     
-                    clearTimeout(uploadTimeout);
-                    console.log('Upload successful, URL:', url);
-                    await meetingService.addDocument(meetingId, {
-                      name: newDoc.name || file.name,
-                      url,
-                      storagePath,
-                      uploadedBy: user.name
-                    });
                     setShowAddDocModal(false);
                     setNewDoc({ name: '', url: '', type: 'file' });
                   } catch (error: any) {
