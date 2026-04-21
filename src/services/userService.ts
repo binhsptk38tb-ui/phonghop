@@ -14,10 +14,11 @@ import {
   query, 
   where,
   serverTimestamp,
-  deleteDoc
+  deleteDoc,
+  updateDoc
 } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserRole, UserPosition } from '../types';
 
 const ADMIN_EMAIL = 'binhsptk38tb@gmail.com';
 
@@ -30,7 +31,14 @@ export const userService = {
         let profile: UserProfile;
         
         if (userDoc.exists()) {
-          profile = userDoc.data() as UserProfile;
+          const data = userDoc.data();
+          profile = {
+            ...data,
+            uid: firebaseUser.uid,
+            // Fallback for migration
+            position: data.position || (data.role === 'admin' ? 'admin' : data.role === 'management' ? 'principal' : 'staff'),
+            role: data.role === 'chairperson' ? 'chairperson' : data.role === 'secretary' ? 'secretary' : 'member'
+          } as UserProfile;
         } else {
           // Check if this email was pre-registered or if it's the admin email
           const q = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
@@ -45,7 +53,8 @@ export const userService = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               name: firebaseUser.displayName || data.name || 'User',
-              role: data.role || 'staff',
+              position: data.position || 'staff',
+              role: data.role || 'member',
               createdAt: data.createdAt || serverTimestamp()
             };
             await setDoc(doc(db, 'users', firebaseUser.uid), profile);
@@ -55,17 +64,19 @@ export const userService = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               name: firebaseUser.displayName || 'Admin',
-              role: 'admin',
+              position: 'admin',
+              role: 'chairperson',
               createdAt: serverTimestamp()
             };
             await setDoc(doc(db, 'users', firebaseUser.uid), profile);
           } else {
-            // Unregistered user - default to staff or handle as restricted
+            // Unregistered user
             profile = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
               name: firebaseUser.displayName || 'Guest',
-              role: 'staff', // Or a 'guest' role if you want stricter control
+              position: 'staff',
+              role: 'member',
               createdAt: serverTimestamp()
             };
             await setDoc(doc(db, 'users', firebaseUser.uid), profile);
@@ -89,18 +100,33 @@ export const userService = {
 
   getAllUsers: async () => {
     const querySnapshot = await getDocs(collection(db, 'users'));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as UserProfile));
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return { 
+        ...data, 
+        uid: doc.id,
+        position: data.position || (data.role === 'admin' ? 'admin' : data.role === 'management' ? 'principal' : 'staff'),
+        role: (data.role === 'chairperson' || data.role === 'secretary' || data.role === 'member') ? data.role : 'member'
+      } as UserProfile;
+    });
   },
 
   deleteUser: async (uid: string) => {
     return deleteDoc(doc(db, 'users', uid));
   },
 
-  registerUser: async (email: string, name: string, role: UserRole, phoneNumber?: string) => {
+  updateUser: async (uid: string, updates: Partial<UserProfile>) => {
+    const userRef = doc(db, 'users', uid);
+    return updateDoc(userRef, updates);
+  },
+
+  registerUser: async (email: string, name: string, position: UserPosition, role: UserRole, phoneNumber?: string) => {
     const userRef = doc(collection(db, 'users'));
     return setDoc(userRef, {
+      uid: userRef.id,
       email,
       name,
+      position,
       role,
       phoneNumber: phoneNumber || '',
       createdAt: serverTimestamp()

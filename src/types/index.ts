@@ -1,9 +1,11 @@
-export type UserRole = 'admin' | 'management' | 'teacher' | 'staff' | 'chairperson' | 'secretary';
+export type UserPosition = 'admin' | 'principal' | 'vice_principal' | 'teacher' | 'staff';
+export type UserRole = 'chairperson' | 'secretary' | 'member';
 
 export interface UserProfile {
   uid: string;
   email: string;
   name: string;
+  position: UserPosition;
   role: UserRole;
   phoneNumber?: string;
   createdAt: any;

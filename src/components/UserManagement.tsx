@@ -7,10 +7,11 @@ import {
   ShieldCheck, 
   Trash2, 
   Search,
-  Filter
+  Filter,
+  Edit2
 } from 'lucide-react';
 import { userService } from '../services/userService';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserRole, UserPosition } from '../types';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx } from 'clsx';
@@ -25,16 +26,37 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [userToEdit, setUserToEdit] = useState<UserProfile | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
     name: '',
     phoneNumber: '',
-    role: 'teacher' as UserRole
+    position: 'teacher' as UserPosition,
+    role: 'member' as UserRole
+  });
+
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    phoneNumber: '',
+    position: 'teacher' as UserPosition,
+    role: 'member' as UserRole
   });
 
   useEffect(() => {
     loadUsers();
   }, []);
+
+  useEffect(() => {
+    if (userToEdit) {
+      setEditFormData({
+        name: userToEdit.name,
+        phoneNumber: userToEdit.phoneNumber || '',
+        position: userToEdit.position,
+        role: userToEdit.role
+      });
+    }
+  }, [userToEdit]);
 
   const loadUsers = async () => {
     const list = await userService.getAllUsers();
@@ -43,10 +65,28 @@ export default function UserManagement() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    await userService.registerUser(newUser.email, newUser.name, newUser.role, newUser.phoneNumber);
+    await userService.registerUser(newUser.email, newUser.name, newUser.position, newUser.role, newUser.phoneNumber);
     setShowAddModal(false);
-    setNewUser({ email: '', name: '', phoneNumber: '', role: 'teacher' });
+    setNewUser({ email: '', name: '', phoneNumber: '', position: 'teacher', role: 'member' });
     loadUsers();
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (userToEdit?.uid) {
+      try {
+        setIsUpdating(true);
+        await userService.updateUser(userToEdit.uid, editFormData);
+        alert('Cập nhật thông tin thành viên thành công!');
+        setUserToEdit(null);
+        await loadUsers();
+      } catch (error) {
+        console.error('Error updating user:', error);
+        alert('Không thể cập nhật thông tin thành viên. Vui lòng thử lại.');
+      } finally {
+        setIsUpdating(false);
+      }
+    }
   };
 
   const confirmDelete = async () => {
@@ -66,15 +106,23 @@ export default function UserManagement() {
     u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case 'admin': return 'QTV';
-      case 'management': return 'BGH';
+  const getPositionLabel = (pos: string) => {
+    switch (pos) {
+      case 'admin': return 'Quản trị viên';
+      case 'principal': return 'Hiệu trưởng';
+      case 'vice_principal': return 'Phó hiệu trưởng';
       case 'teacher': return 'Giáo viên';
       case 'staff': return 'Nhân viên';
+      default: return 'Khách';
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
       case 'chairperson': return 'Chủ tọa';
       case 'secretary': return 'Thư ký';
-      default: return 'Khách';
+      case 'member': return 'Thành viên';
+      default: return 'Khác';
     }
   };
 
@@ -117,8 +165,8 @@ export default function UserManagement() {
               <tr className="border-b border-slate-100 italic">
                 <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">#</th>
                 <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Họ và Tên</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Email / SĐT</th>
                 <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Chức vụ</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Vai trò họp</th>
                 <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Ngày tạo</th>
                 <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Thao tác</th>
               </tr>
@@ -138,16 +186,12 @@ export default function UserManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-slate-500">{u.email}</span>
-                      {u.phoneNumber && <span className="text-[10px] font-bold text-blue-500">{u.phoneNumber}</span>}
-                    </div>
+                    <span className="text-sm font-bold text-slate-700">{getPositionLabel(u.position)}</span>
+                    {u.phoneNumber && <p className="text-[10px] font-bold text-blue-500 mt-0.5">{u.phoneNumber}</p>}
                   </td>
                   <td className="px-6 py-4">
                     <span className={cn(
                       "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
-                      u.role === 'admin' ? "bg-red-50 text-red-600" :
-                      u.role === 'management' ? "bg-blue-50 text-blue-600" :
                       u.role === 'chairperson' ? "bg-emerald-50 text-emerald-600" :
                       u.role === 'secretary' ? "bg-amber-50 text-amber-600" :
                       "bg-slate-100 text-slate-600"
@@ -161,12 +205,22 @@ export default function UserManagement() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => setUserToDelete(u)}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    <div className="flex items-center justify-end gap-2 text-slate-300">
+                      <button 
+                        onClick={() => setUserToEdit(u)}
+                        className="p-2 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
+                        title="Chỉnh sửa"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button 
+                        onClick={() => setUserToDelete(u)}
+                        className="p-2 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                        title="Xóa"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -236,20 +290,34 @@ export default function UserManagement() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Phân quyền</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Chức vụ</label>
                   <div className="relative">
                     <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                    <select
+                      className="w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      value={newUser.position}
+                      onChange={e => setNewUser({...newUser, position: e.target.value as UserPosition})}
+                    >
+                      <option value="principal">Hiệu trưởng</option>
+                      <option value="vice_principal">Phó hiệu trưởng</option>
+                      <option value="teacher">Giáo viên</option>
+                      <option value="staff">Nhân viên</option>
+                      <option value="admin">Quản trị viên</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Vai trò trong cuộc họp</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
                       <select
                         className="w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                         value={newUser.role}
                         onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}
                       >
-                        <option value="chairperson">Chủ tọa cuộc họp</option>
-                        <option value="secretary">Thư ký cuộc họp</option>
-                        <option value="management">Ban giám hiệu (CBQL)</option>
-                        <option value="teacher">Giáo viên</option>
-                        <option value="staff">Nhân viên</option>
-                        <option value="admin">Quản trị viên</option>
+                        <option value="member">Thành viên</option>
+                        <option value="chairperson">Chủ tọa</option>
+                        <option value="secretary">Thư ký</option>
                       </select>
                   </div>
                 </div>
@@ -266,6 +334,112 @@ export default function UserManagement() {
                     className="flex-[2] rounded-2xl bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-blue-700"
                   >
                     Xác nhận cấp
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit User Modal */}
+      <AnimatePresence>
+        {userToEdit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setUserToEdit(null)}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl p-8"
+            >
+              <h3 className="text-2xl font-bold text-slate-900 mb-6">Chỉnh sửa thành viên</h3>
+              <form onSubmit={handleEditUser} className="space-y-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Tên thành viên</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                    <input
+                      required
+                      type="text"
+                      placeholder="VD: Nguyễn Văn A"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      value={editFormData.name}
+                      onChange={e => setEditFormData({...editFormData, name: e.target.value})}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Số điện thoại (tùy chọn)</label>
+                  <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs uppercase">SĐT</div>
+                    <input
+                      type="tel"
+                      placeholder="VD: 0912345678"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-14 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      value={editFormData.phoneNumber}
+                      onChange={e => setEditFormData({...editFormData, phoneNumber: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Chức vụ</label>
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                    <select
+                      className="w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                      value={editFormData.position}
+                      onChange={e => setEditFormData({...editFormData, position: e.target.value as UserPosition})}
+                    >
+                      <option value="principal">Hiệu trưởng</option>
+                      <option value="vice_principal">Phó hiệu trưởng</option>
+                      <option value="teacher">Giáo viên</option>
+                      <option value="staff">Nhân viên</option>
+                      <option value="admin">Quản trị viên</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Vai trò trong cuộc họp</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+                      <select
+                        className="w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 py-3 font-medium outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                        value={editFormData.role}
+                        onChange={e => setEditFormData({...editFormData, role: e.target.value as UserRole})}
+                      >
+                        <option value="member">Thành viên</option>
+                        <option value="chairperson">Chủ tọa</option>
+                        <option value="secretary">Thư ký</option>
+                      </select>
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setUserToEdit(null)}
+                    className="flex-1 rounded-2xl border border-slate-200 py-3.5 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUpdating}
+                    className={cn(
+                      "flex-[2] rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition-all",
+                      isUpdating 
+                        ? "bg-slate-400 cursor-not-allowed" 
+                        : "bg-slate-900 shadow-slate-200 hover:bg-slate-800 active:scale-[0.98]"
+                    )}
+                  >
+                    {isUpdating ? 'Đang cập nhật...' : 'Cập nhật'}
                   </button>
                 </div>
               </form>

@@ -47,7 +47,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard user={user} onJoinMeeting={navigateToMeeting} />;
       case 'users':
-        return user.role === 'admin' ? (
+        return user.position === 'admin' ? (
           <UserManagement />
         ) : (
           <div className="p-8 text-center">Bạn không có quyền truy cập trang này.</div>

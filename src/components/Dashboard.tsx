@@ -91,7 +91,7 @@ export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
           <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Danh sách cuộc họp</h2>
           <p className="text-slate-500 font-medium mt-1">Chào {user.name}, quản lý và theo dõi các buổi họp của nhà trường.</p>
         </div>
-        {(user.role === 'admin' || user.role === 'management') && (
+        {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -154,7 +154,7 @@ export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
               </div>
 
               <div className="flex items-center gap-3">
-                {user.role === 'admin' && (
+                {user.position === 'admin' && (
                   <button
                     onClick={(e) => handleDelete(e, meeting.id)}
                     className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"

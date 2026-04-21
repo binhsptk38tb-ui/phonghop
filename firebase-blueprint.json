@@ -2,16 +2,18 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "System user with roles",
+      "description": "System user with position and meeting roles",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "name": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "management", "teacher", "staff"] },
+        "phoneNumber": { "type": "string" },
+        "position": { "type": "string", "enum": ["admin", "principal", "vice_principal", "teacher", "staff"] },
+        "role": { "type": "string", "enum": ["chairperson", "secretary", "member"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "email", "role", "name"]
+      "required": ["uid", "email", "position", "role", "name"]
     },
     "Meeting": {
       "title": "Meeting",

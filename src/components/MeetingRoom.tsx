@@ -20,7 +20,9 @@ import {
   X,
   Eye,
   Paperclip,
-  Loader2
+  Loader2,
+  Mic,
+  MicOff
 } from 'lucide-react';
 import React from 'react';
 import { meetingService } from '../services/meetingService';
@@ -68,6 +70,8 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewDoc, setPreviewDoc] = useState<MeetingDocument | null>(null);
   const [isPrintPreview, setIsPrintPreview] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -231,6 +235,61 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
     URL.revokeObjectURL(url);
   };
 
+  const toggleRecording = () => {
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Trình duyệt của bạn không hỗ trợ nhận diện giọng nói.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'vi-VN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        setMeeting(prev => {
+          if (!prev) return prev;
+          const currentResolution = prev.resolution || '';
+          const updatedResolution = currentResolution ? `${currentResolution}\n${finalTranscript.trim()}` : finalTranscript.trim();
+          meetingService.updateMeeting(meetingId, { resolution: updatedResolution });
+          return { ...prev, resolution: updatedResolution };
+        });
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+  };
+
   if (!meeting) return <div className="p-8 text-center text-slate-500 font-bold">Không tìm thấy dữ liệu cuộc họp...</div>;
 
   const tabs = [
@@ -374,7 +433,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
         </div>
 
         <div className="flex gap-2">
-          {(user.role === 'admin' || user.role === 'management') && (
+          {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
             <>
               {meeting.status === 'upcoming' && (
                 <button 
@@ -438,7 +497,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                   <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                     <FileText className="text-blue-600" /> Nội dung cuộc họp
                   </h3>
-                  {(user.role === 'admin' || user.role === 'management') && (
+                  {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded">Có thể chỉnh sửa</span>
                   )}
                 </div>
@@ -446,7 +505,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                   className="flex-1 w-full bg-slate-50 rounded-2xl p-6 text-slate-700 font-medium leading-relaxed border border-slate-100 outline-none focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all resize-none"
                   placeholder="Ghi nhận nội dung thảo luận và các sự kiện trong cuộc họp..."
                   value={meeting.content || ''}
-                  readOnly={!(user.role === 'admin' || user.role === 'management')}
+                  readOnly={!(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal')}
                   onChange={e => meetingService.updateMeeting(meetingId, { content: e.target.value })}
                 />
               </div>
@@ -456,12 +515,26 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                   <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                     <CheckSquare className="text-emerald-600" /> Nghị quyết / Kết luận
                   </h3>
+                  {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || user.role === 'chairperson') && (
+                    <button
+                      onClick={toggleRecording}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
+                        isRecording 
+                          ? "bg-red-500 text-white animate-pulse shadow-lg shadow-red-200" 
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      )}
+                    >
+                      {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                      {isRecording ? 'Đang ghi âm...' : 'Ghi âm kết luận'}
+                    </button>
+                  )}
                 </div>
                 <textarea
-                  className="w-full bg-emerald-50/30 rounded-2xl p-6 text-slate-700 font-bold leading-relaxed border border-emerald-100 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-100 transition-all resize-none"
+                  className="w-full bg-emerald-50/30 rounded-2xl p-6 text-slate-700 font-bold leading-relaxed border border-emerald-100 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-100 transition-all resize-none min-h-[150px]"
                   placeholder="Ghi các nghị quyết đã được thông qua..."
                   value={meeting.resolution || ''}
-                  readOnly={!(user.role === 'admin' || user.role === 'management')}
+                  readOnly={!(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || user.role === 'chairperson')}
                   onChange={e => meetingService.updateMeeting(meetingId, { resolution: e.target.value })}
                 />
               </div>
@@ -509,20 +582,22 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
 
         {activeTab === 'attendance' && (
           <div className="bg-white rounded-3xl p-8 border border-slate-200 h-full flex flex-col">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h3 className="text-2xl font-bold text-slate-900">Sổ điểm danh cuộc họp</h3>
-                <p className="text-slate-500 font-medium mt-1">Xác nhận sự hiện diện của các thành viên.</p>
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">Sổ điểm danh cuộc họp</h3>
+                  <p className="text-slate-500 font-medium mt-1">Xác nhận sự hiện diện của các thành viên.</p>
+                </div>
+                <div className="flex gap-2">
+                  {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
+                    <button 
+                      onClick={() => handleAttendance('present')}
+                      className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all"
+                    >
+                      Báo diện tất cả
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => handleAttendance('present')}
-                  className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all"
-                >
-                  Có mặt ngay
-                </button>
-              </div>
-            </div>
 
             <div className="flex-1 overflow-y-auto pr-2">
               <table className="w-full">
@@ -531,7 +606,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                     <th className="text-left py-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-4">Thành viên</th>
                     <th className="text-left py-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-4">Trạng thái</th>
                     <th className="text-left py-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-4">Thời điểm</th>
-                    {(user.role === 'admin' || user.role === 'management') && (
+                    {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
                       <th className="text-right py-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-4">Thao tác</th>
                     )}
                   </tr>
@@ -561,7 +636,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                       <td className="py-4 px-4 text-sm font-medium text-slate-500">
                         {record.updatedAt ? format(record.updatedAt.toDate(), 'HH:mm:ss') : 'N/A'}
                       </td>
-                      {(user.role === 'admin' || user.role === 'management') && (
+                      {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
                         <td className="py-4 px-4 text-right">
                            <div className="flex items-center justify-end gap-1">
                              <button className="h-8 w-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all">
@@ -612,20 +687,27 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
             </div>
 
             <form onSubmit={postOpinion} className="p-6 bg-white border-t border-slate-100">
-              <div className="bg-slate-50 flex items-center gap-3 p-2 rounded-2xl border border-slate-200/60 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100 transition-all">
-                <input
-                  type="text"
-                  placeholder="Nhập ý kiến hoặc đóng góp tại đây..."
-                  className="flex-1 bg-transparent border-none outline-none px-4 text-sm font-medium text-slate-700"
+              <div className="flex flex-col gap-3">
+                <textarea
+                  placeholder="Nhập ý kiến hoặc đóng góp chi tiết tại đây..."
+                  className="w-full bg-slate-50 rounded-3xl p-8 text-base font-medium text-slate-700 border border-slate-200/60 focus:bg-white focus:ring-8 focus:ring-blue-100 transition-all outline-none resize-none min-h-[300px]"
                   value={opinionInput}
                   onChange={e => setOpinionInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      postOpinion(e);
+                    }
+                  }}
                 />
-                <button
-                  type="submit"
-                  className="h-10 w-10 flex items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95"
-                >
-                  <Send size={18} />
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95 text-sm font-bold"
+                  >
+                    <Send size={18} /> Gửi ý kiến
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -638,7 +720,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                 <h3 className="text-2xl font-bold text-slate-900">Danh sách nhiệm vụ</h3>
                 <p className="text-slate-500 font-medium mt-1">Các chỉ đạo và phân công công việc sau cuộc họp.</p>
               </div>
-              {(user.role === 'admin' || user.role === 'management') && (
+              {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
                 <button 
                   onClick={addTask}
                   className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
@@ -692,7 +774,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                 <h3 className="text-2xl font-bold text-slate-900">Hồ sơ & Tài liệu</h3>
                 <p className="text-slate-500 font-medium mt-1">Lưu trữ các tài liệu, giáo án, báo cáo liên quan (Google Drive, OneDrive...)</p>
               </div>
-              {(user.role === 'admin' || user.role === 'management') && (
+              {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || user.role === 'secretary') && (
                 <button 
                   onClick={() => setShowAddDocModal(true)}
                   className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
@@ -729,7 +811,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                     >
                       <Download size={20} />
                     </a>
-                    {(user.role === 'admin' || user.role === 'management' || docData.uploadedBy === user.name) && (
+                    {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || docData.uploadedBy === user.name) && (
                       <button 
                         onClick={() => meetingService.deleteDocument(meetingId, docData.id, docData.storagePath)}
                         className="h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-300 hover:text-red-500 hover:border-red-100 transition-all"

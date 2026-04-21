@@ -28,8 +28,28 @@ interface LayoutProps {
 export default function Layout({ user, currentPage, onNavigate, onLogout, children }: LayoutProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Cuộc họp', icon: LayoutDashboard },
-    ...(user.role === 'admin' ? [{ id: 'users', label: 'Thành viên', icon: Users }] : []),
+    ...(user.position === 'admin' ? [{ id: 'users', label: 'Thành viên', icon: Users }] : []),
   ];
+
+  const getPositionLabel = (pos: string) => {
+    switch (pos) {
+      case 'admin': return 'QTV';
+      case 'principal': return 'Hiệu trưởng';
+      case 'vice_principal': return 'Phó hiệu trưởng';
+      case 'teacher': return 'Giáo viên';
+      case 'staff': return 'Nhân viên';
+      default: return 'Khách';
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'chairperson': return 'Chủ tọa';
+      case 'secretary': return 'Thư ký';
+      case 'member': return 'Thành viên';
+      default: return 'Khác';
+    }
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -80,13 +100,10 @@ export default function Layout({ user, currentPage, onNavigate, onLogout, childr
               </div>
               <div className="overflow-hidden">
                 <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
-                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">
-                  {user.role === 'admin' ? 'Quản trị viên' : 
-                   user.role === 'management' ? 'Ban giám hiệu' : 
-                   user.role === 'chairperson' ? 'Chủ tọa' :
-                   user.role === 'secretary' ? 'Thư ký' :
-                   user.role === 'teacher' ? 'Giáo viên' : 'Nhân viên'}
-                </p>
+                <div className="flex flex-wrap gap-1 mt-0.5">
+                  <span className="text-[9px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded uppercase">{getPositionLabel(user.position)}</span>
+                  <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded uppercase">{getRoleLabel(user.role)}</span>
+                </div>
               </div>
             </div>
             <button
