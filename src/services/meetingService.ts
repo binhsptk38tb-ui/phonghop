@@ -25,6 +25,19 @@ export const meetingService = {
     });
   },
 
+  subscribeMeeting: (meetingId: string, callback: (meeting: Meeting | null) => void) => {
+    return onSnapshot(doc(db, 'meetings', meetingId), (docSnap) => {
+      if (docSnap.exists()) {
+        callback({ id: docSnap.id, ...docSnap.data() } as Meeting);
+      } else {
+        callback(null);
+      }
+    }, (error) => {
+      console.error("Error subscribing to meeting:", error);
+      callback(null);
+    });
+  },
+
   createMeeting: async (meeting: Partial<Meeting>) => {
     return addDoc(collection(db, 'meetings'), {
       ...meeting,

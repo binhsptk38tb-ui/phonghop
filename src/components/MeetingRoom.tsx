@@ -56,6 +56,7 @@ type TabType = 'info' | 'attendance' | 'opinions' | 'tasks' | 'documents';
 
 export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProps) {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [opinions, setOpinions] = useState<Opinion[]>([]);
@@ -76,10 +77,11 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setLoading(true);
     // Basic Meeting Info
-    const unsubMeeting = meetingService.subscribeMeetings((meetings) => {
-      const current = meetings.find(m => m.id === meetingId);
-      if (current) setMeeting(current);
+    const unsubMeeting = meetingService.subscribeMeeting(meetingId, (m) => {
+      setMeeting(m);
+      setLoading(false);
     });
 
     const unsubAttendance = meetingService.subscribeAttendance(meetingId, setAttendance);
@@ -290,6 +292,38 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
     recognitionRef.current = recognition;
   };
 
+  const formatDate = (date: any, pattern: string) => {
+    if (!date) return 'N/A';
+    try {
+      let d;
+      // Handle Firestore Timestamp
+      if (date && typeof date.toDate === 'function') {
+        d = date.toDate();
+      } 
+      // Handle JS Date or other parseable formats
+      else {
+        d = new Date(date);
+      }
+      
+      if (isNaN(d.getTime())) return 'N/A';
+      return format(d, pattern, { locale: vi });
+    } catch (e) {
+      console.error('Date formatting error:', e);
+      return 'N/A';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto" />
+          <p className="text-slate-500 font-bold">Đang tải dữ liệu cuộc họp...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!meeting) return <div className="p-8 text-center text-slate-500 font-bold">Không tìm thấy dữ liệu cuộc họp...</div>;
 
   const tabs = [
@@ -339,7 +373,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
           </div>
 
           <div className="space-y-4 mb-8 text-sm">
-            <p><strong>1. Thời gian:</strong> {format(meeting.scheduledAt.toDate ? meeting.scheduledAt.toDate() : new Date(meeting.scheduledAt), 'HH:mm, dd/MM/yyyy')}</p>
+            <p><strong>1. Thời gian:</strong> {formatDate(meeting.scheduledAt, 'HH:mm, dd/MM/yyyy')}</p>
             <p><strong>2. Địa điểm:</strong> {meeting.location || 'Tại văn phòng'}</p>
             <p><strong>3. Thành phần tham dự:</strong> </p>
             <div className="ml-5">
@@ -551,7 +585,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                     <div className="text-sm">
                       <p className="font-bold text-slate-900">Thời gian bắt đầu</p>
                       <p className="text-slate-500 font-medium">
-                        {format(meeting.scheduledAt.toDate ? meeting.scheduledAt.toDate() : new Date(meeting.scheduledAt), 'HH:mm - dd/MM/yyyy')}
+                        {formatDate(meeting.scheduledAt, 'HH:mm - dd/MM/yyyy')}
                       </p>
                     </div>
                   </div>
@@ -634,7 +668,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                         </span>
                       </td>
                       <td className="py-4 px-4 text-sm font-medium text-slate-500">
-                        {record.updatedAt ? format(record.updatedAt.toDate(), 'HH:mm:ss') : 'N/A'}
+                        {formatDate(record.updatedAt, 'HH:mm:ss')}
                       </td>
                       {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
                         <td className="py-4 px-4 text-right">
@@ -671,7 +705,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                   <div className="flex items-center gap-2 mb-1.5 px-1">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{opinion.userName}</span>
                     <span className="text-[10px] text-slate-300">
-                      {opinion.createdAt ? format(opinion.createdAt.toDate(), 'HH:mm') : ''}
+                      {formatDate(opinion.createdAt, 'HH:mm')}
                     </span>
                   </div>
                   <div className={cn(
@@ -752,7 +786,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                     <div className="flex items-center gap-4 mt-1.5">
                       <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Phân công: {task.assigneeName}</span>
                       <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        <Clock size={10} /> Hạn chót: {task.dueDate ? format(task.dueDate.toDate(), 'dd/MM') : 'ASAP'}
+                        <Clock size={10} /> Hạn chót: {formatDate(task.dueDate, 'dd/MM')}
                       </span>
                     </div>
                   </div>
@@ -1118,7 +1152,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
         </div>
 
         <div className="space-y-4 mb-8 text-sm">
-          <p><strong>Thời gian:</strong> {format(meeting.scheduledAt.toDate ? meeting.scheduledAt.toDate() : new Date(meeting.scheduledAt), 'HH:mm, dd/MM/yyyy')}</p>
+          <p><strong>Thời gian:</strong> {formatDate(meeting.scheduledAt, 'HH:mm, dd/MM/yyyy')}</p>
           <p><strong>Địa điểm:</strong> {meeting.location || 'Tại văn phòng'}</p>
           <p><strong>Thành phần tham dự:</strong> {attendance.filter(a => a.status === 'present').map(a => a.userName).join(', ')}</p>
           <p><strong>Vắng mặt:</strong> {attendance.filter(a => a.status !== 'present').map(a => `${a.userName} (${a.status})`).join(', ') || 'Không'}</p>
