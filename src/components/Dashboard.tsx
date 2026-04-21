@@ -26,6 +26,8 @@ interface DashboardProps {
 export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [meetingToDelete, setMeetingToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [newMeeting, setNewMeeting] = useState({
     title: '',
     description: '',
@@ -54,10 +56,23 @@ export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
     });
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
+  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (confirm('Bạn có chắc chắn muốn xóa cuộc họp này?')) {
-      await meetingService.deleteMeeting(id);
+    setMeetingToDelete(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!meetingToDelete) return;
+    
+    try {
+      setIsDeleting(true);
+      await meetingService.deleteMeeting(meetingToDelete);
+      setMeetingToDelete(null);
+    } catch (error) {
+      console.error('Error deleting meeting:', error);
+      alert('Không thể xóa cuộc họp. Có thể bạn không có quyền hoặc có lỗi hệ thống.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -91,7 +106,7 @@ export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
           <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Danh sách cuộc họp</h2>
           <p className="text-slate-500 font-medium mt-1">Chào {user.name}, quản lý và theo dõi các buổi họp của nhà trường.</p>
         </div>
-        {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
+        {(user.role === 'chairperson' || user.role === 'secretary' || user.email === 'binhsptk38tb@gmail.com') && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -154,10 +169,11 @@ export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
               </div>
 
               <div className="flex items-center gap-3">
-                {user.position === 'admin' && (
+                {(user.role === 'chairperson' || user.role === 'secretary' || user.email === 'binhsptk38tb@gmail.com') && (
                   <button
-                    onClick={(e) => handleDelete(e, meeting.id)}
-                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    onClick={(e) => handleDeleteClick(e, meeting.id)}
+                    className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                    title="Xóa cuộc họp"
                   >
                     <Trash2 size={20} />
                   </button>
@@ -171,7 +187,7 @@ export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
         )}
       </div>
 
-      {/* Create Modal */}
+      {/* Modals */}
       <AnimatePresence>
         {showCreateModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4 overflow-y-auto pt-20 pb-20">
@@ -250,6 +266,48 @@ export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+
+        {meetingToDelete && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setMeetingToDelete(null)}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl p-8 text-center"
+            >
+              <div className="h-16 w-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Xác nhận xóa cuộc họp</h3>
+              <p className="text-slate-500 mb-6">Bạn có chắc chắn muốn xóa cuộc họp này? Hành động này không thể hoàn tác.</p>
+              
+              <div className="flex gap-3">
+                <button
+                  disabled={isDeleting}
+                  onClick={() => setMeetingToDelete(null)}
+                  className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Quay lại
+                </button>
+                <button
+                  disabled={isDeleting}
+                  onClick={confirmDelete}
+                  className="flex-1 rounded-2xl bg-red-600 py-3 text-sm font-bold text-white shadow-lg shadow-red-200 transition-all hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeleting && <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                  {isDeleting ? 'Đang xóa...' : 'Xóa ngay'}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

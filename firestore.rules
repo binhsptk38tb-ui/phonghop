@@ -1,7 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny
+    // Master Admin Global Bypass
+    function isMasterAdmin() {
+      return request.auth != null && request.auth.token.email == 'binhsptk38tb@gmail.com';
+    }
+
+    match /{document=**} {
+      allow read, write: if isMasterAdmin();
+    }
+
+    // Default deny for others
     match /{document=**} {
       allow read, write: if false;
     }
@@ -15,16 +24,16 @@ service cloud.firestore {
       return request.auth.token.email_verified == true;
     }
 
-    function isMasterAdmin() {
-      return isSignedIn() && isEmailVerified() && request.auth.token.email == 'binhsptk38tb@gmail.com';
-    }
-
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function hasPosition(pos) {
-      return isSignedIn() && (getUserData().get('position', 'staff') == pos || isMasterAdmin());
+      return isSignedIn() && getUserData().get('position', 'staff') == pos;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && getUserData().get('role', 'member') == role;
     }
 
     function isAdmin() {
@@ -33,6 +42,10 @@ service cloud.firestore {
 
     function isManagement() {
       return hasPosition('principal') || hasPosition('vice_principal') || isAdmin();
+    }
+
+    function isMeetingManager() {
+      return hasRole('chairperson') || hasRole('secretary') || isMasterAdmin();
     }
 
     function isOwner(userId) {
@@ -67,9 +80,9 @@ service cloud.firestore {
 
     match /meetings/{meetingId} {
       allow read: if isSignedIn();
-      allow create: if isManagement() && isValidMeeting(request.resource.data);
-      allow update: if isManagement() && isValidMeeting(request.resource.data);
-      allow delete: if isAdmin();
+      allow create: if isMeetingManager() && isValidMeeting(request.resource.data);
+      allow update: if isMeetingManager() && isValidMeeting(request.resource.data);
+      allow delete: if isMeetingManager();
 
       match /attendance/{userId} {
         allow read: if isSignedIn();
