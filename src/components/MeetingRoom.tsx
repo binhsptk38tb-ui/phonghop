@@ -25,7 +25,8 @@ import {
   MicOff,
   NotebookPen,
   Save,
-  Home
+  Home,
+  HelpCircle
 } from 'lucide-react';
 import React from 'react';
 import { meetingService } from '../services/meetingService';
@@ -119,8 +120,10 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
     await meetingService.updateMeeting(meetingId, { status });
   };
 
-  const handleAttendance = async (status: AttendanceStatus) => {
-    await meetingService.updateAttendance(meetingId, user.uid, user.name, status);
+  const handleAttendance = async (status: AttendanceStatus, targetUser?: { uid: string, name: string }) => {
+    const uid = targetUser?.uid || user.uid;
+    const name = targetUser?.name || user.name;
+    await meetingService.updateAttendance(meetingId, uid, name, status);
   };
 
   const postOpinion = async (e: React.FormEvent) => {
@@ -247,13 +250,19 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   };
 
   const downloadPersonalNote = () => {
-    const element = document.createElement("a");
-    const file = new Blob([personalNote], {type: 'text/plain'});
-    element.href = URL.createObjectURL(file);
-    element.download = `Ghi_chu_${meeting?.title || 'cuoc_hop'}_${user.name}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Ghi chú cá nhân</title></head><body>";
+    const footer = "</body></html>";
+    const content = header + `<div style='white-space: pre-wrap; font-family: "Times New Roman", serif; font-size: 13pt;'>${personalNote}</div>` + footer;
+
+    const blob = new Blob(['\ufeff', content], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Ghi_chu_${meeting?.title || 'cuoc_hop'}_${user.name}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const toggleRecording = () => {
@@ -347,9 +356,7 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
 
   const tabs = [
     { id: 'info', label: 'Nội dung', icon: FileText },
-    ...(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || user.role === 'chairperson' || user.role === 'secretary' 
-      ? [{ id: 'attendance', label: 'Điểm danh', icon: Users }] 
-      : []),
+    { id: 'attendance', label: 'Điểm danh', icon: Users },
     { id: 'opinions', label: 'Ý kiến', icon: MessageSquare },
     { id: 'notes', label: 'Ghi chú', icon: NotebookPen },
     { id: 'tasks', label: 'Nhiệm vụ', icon: CheckSquare },
@@ -611,15 +618,32 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                       </p>
                     </div>
                   </div>
-                  {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || user.role === 'chairperson' || user.role === 'secretary') && (
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-                        <Users size={16} />
-                      </div>
-                      <div className="text-sm">
-                        <p className="font-bold text-slate-900">Thành phần họp</p>
-                        <p className="text-slate-500 font-medium">{attendance.length} thành viên đã điểm danh</p>
-                      </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                      <Users size={16} />
+                    </div>
+                    <div className="text-sm">
+                      <p className="font-bold text-slate-900">Thành phần họp</p>
+                      <p className="text-slate-500 font-medium">{attendance.length} thành viên đã điểm danh</p>
+                    </div>
+                  </div>
+
+                  {/* Quick Attendance for current user */}
+                  {!attendance.find(a => a.userId === user.uid) && meeting.status === 'ongoing' && (
+                    <div className="pt-2">
+                       <button 
+                        onClick={() => handleAttendance('present')}
+                        className="w-full py-3 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle2 size={14} /> Điểm danh ngay
+                      </button>
+                    </div>
+                  )}
+                  {attendance.find(a => a.userId === user.uid) && (
+                    <div className="pt-2 px-3 py-2 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-2">
+                      <CheckCircle2 size={14} className="text-emerald-600" />
+                      <span className="text-xs font-bold text-emerald-700">Bạn đã điểm danh</span>
                     </div>
                   )}
                 </div>
@@ -639,74 +663,189 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
         )}
 
         {activeTab === 'attendance' && (
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 h-full flex flex-col">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-900">Sổ điểm danh cuộc họp</h3>
-                  <p className="text-slate-500 font-medium mt-1">Xác nhận sự hiện diện của các thành viên.</p>
-                </div>
-                <div className="flex gap-2">
-                  {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
-                    <button 
-                      onClick={() => handleAttendance('present')}
-                      className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all"
-                    >
-                      Báo diện tất cả
-                    </button>
-                  )}
-                </div>
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 flex flex-col gap-8 shadow-sm">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900 leading-tight">Sổ điểm danh cuộc họp</h3>
+                <p className="text-slate-500 font-medium mt-1">Hệ thống ghi nhận sự hiện diện thời gian thực.</p>
               </div>
 
-            <div className="flex-1 overflow-y-auto pr-2">
-              <table className="w-full">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left py-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-4">Thành viên</th>
-                    <th className="text-left py-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-4">Trạng thái</th>
-                    <th className="text-left py-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-4">Thời điểm</th>
-                    {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
-                      <th className="text-right py-4 text-xs font-bold text-slate-400 uppercase tracking-widest px-4">Thao tác</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {attendance.map((record) => (
-                    <tr key={record.userId} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
-                            {record.userName.charAt(0).toUpperCase()}
-                          </div>
-                          <span className="font-bold text-slate-800">{record.userName}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className={cn(
-                          "px-3 py-1 rounded-full text-xs font-black uppercase tracking-tighter",
-                          record.status === 'present' ? "bg-emerald-100 text-emerald-700" :
-                          record.status === 'absent' ? "bg-rose-100 text-rose-700" :
-                          record.status === 'late' ? "bg-amber-100 text-amber-700" :
-                          "bg-slate-100 text-slate-600"
-                        )}>
-                          {record.status === 'present' ? 'Có mặt' : record.status === 'absent' ? 'Vắng mặt' : record.status === 'late' ? 'Đến muộn' : 'Vắng (Có phép)'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-sm font-medium text-slate-500">
-                        {formatDate(record.updatedAt, 'HH:mm:ss')}
-                      </td>
+            {/* Attendance Statistics Summary */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                { label: 'Tổng số', count: allUsers.length, color: 'slate', icon: Users },
+                { label: 'Có mặt', count: attendance.filter(a => a.status === 'present' || a.status === 'late').length, color: 'emerald', icon: CheckCircle2 },
+                { label: 'Đến muộn', count: attendance.filter(a => a.status === 'late').length, color: 'amber', icon: Clock },
+                { label: 'Vắng mặt', count: allUsers.length - attendance.filter(a => a.status === 'present' || a.status === 'late' || a.status === 'excused').length, color: 'rose', icon: X },
+                { label: 'Chưa điểm danh', count: allUsers.length - attendance.length, color: 'slate', icon: HelpCircle },
+              ].map((stat) => (
+                <div key={stat.label} className={cn(
+                  "p-4 rounded-2xl border flex flex-col justify-between shadow-sm",
+                  stat.color === 'emerald' ? "bg-emerald-50 border-emerald-100" :
+                  stat.color === 'amber' ? "bg-amber-50 border-amber-100" :
+                  stat.color === 'rose' ? "bg-rose-50 border-rose-100" :
+                  "bg-slate-50 border-slate-100"
+                )}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className={cn("text-[10px] font-bold uppercase tracking-wider", `text-${stat.color}-600`)}>{stat.label}</p>
+                    <div className={cn("h-6 w-6 rounded-md flex items-center justify-center", `bg-${stat.color}-100/50 text-${stat.color}-600`)}>
+                      <stat.icon size={14} />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-black text-slate-900">{stat.count}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* My Attendance Selection */}
+            <div className="p-6 bg-slate-900 rounded-3xl text-white shadow-xl shadow-slate-200">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">ĐIỂM DANH CỦA BẠN</h4>
+                </div>
+                {attendance.find(a => a.userId === user.uid) && (
+                  <span className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-tighter rounded-full">
+                    BẠN ĐÃ ĐIỂM DANH
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'present', label: 'Có mặt', color: 'bg-emerald-600', icon: CheckCircle2 },
+                  { id: 'late', label: 'Đến muộn', color: 'bg-amber-600', icon: Clock },
+                  { id: 'absent', label: 'Vắng mặt', color: 'bg-rose-600', icon: X },
+                  { id: 'excused', label: 'Vắng (Có phép)', color: 'bg-blue-600', icon: GraduationCap },
+                ].map((status) => {
+                  const userRecord = attendance.find(a => a.userId === user.uid);
+                  const isCurrent = userRecord?.status === status.id;
+                  const hasAttended = !!userRecord;
+
+                  return (
+                    <button
+                      key={status.id}
+                      disabled={hasAttended}
+                      onClick={() => handleAttendance(status.id as AttendanceStatus)}
+                      className={cn(
+                        "flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all shadow-sm",
+                        isCurrent 
+                          ? `${status.color} text-white shadow-lg ring-4 ring-offset-2 ring-emerald-500/20` 
+                          : hasAttended
+                            ? "bg-slate-800/30 text-slate-600 border border-slate-800 cursor-not-allowed opacity-40 px-4"
+                            : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700 active:scale-95"
+                      )}
+                    >
+                      <status.icon size={18} />
+                      {status.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {attendance.find(a => a.userId === user.uid) && (
+                <p className="mt-4 text-[10px] text-slate-500 font-medium">
+                  Hệ thống ghi nhận vào lúc: {formatDate(attendance.find(a => a.userId === user.uid)?.updatedAt, 'HH:mm:ss dd/MM/yyyy')}
+                </p>
+              )}
+            </div>
+
+            {/* Combined Attendance Table for better visibility */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-2">
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">DANH SÁCH THÀNH VIÊN CHI TIẾT</h4>
+              </div>
+              <div className="border border-slate-100 rounded-3xl overflow-hidden bg-white shadow-sm">
+                <table className="w-full">
+                  <thead className="bg-slate-50">
+                    <tr className="border-b border-slate-100">
+                      <th className="text-left py-4 px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Thành viên</th>
+                      <th className="text-left py-4 px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Trạng thái</th>
+                      <th className="text-left py-4 px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Thời điểm</th>
                       {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal') && (
-                        <td className="py-4 px-4 text-right">
-                           <div className="flex items-center justify-end gap-1">
-                             <button className="h-8 w-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all">
-                               <Trash2 size={14} />
-                             </button>
-                           </div>
-                        </td>
+                        <th className="text-right py-4 px-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quản lý</th>
                       )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {allUsers.map((u) => {
+                      const record = attendance.find(a => a.userId === u.uid || (u.email && a.userId === u.email));
+                      return (
+                        <tr key={u.uid} className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm border transition-all",
+                                record ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-100 text-slate-400 border-slate-200"
+                              )}>
+                                {u.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-800 text-sm">{u.name}</p>
+                                <p className="text-[10px] text-slate-400 font-medium">
+                                  {u.position === 'admin' ? 'Quản trị' : u.position === 'principal' || u.position === 'vice_principal' ? 'Ban giám hiệu' : 'Thành viên'}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-center">
+                            {record ? (
+                              <span className={cn(
+                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter whitespace-nowrap inline-block",
+                                record.status === 'present' ? "bg-emerald-100 text-emerald-700" :
+                                record.status === 'late' ? "bg-amber-100 text-amber-700" :
+                                record.status === 'excused' ? "bg-blue-100 text-blue-700" :
+                                "bg-rose-100 text-rose-700"
+                              )}>
+                                {record.status === 'present' ? 'CÓ MẶT' : record.status === 'late' ? 'ĐẾN MUỘN' : record.status === 'excused' ? 'CÓ PHÉP' : 'VẮNG MẶT'}
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400 uppercase tracking-tighter inline-block">
+                                CHƯA ĐIỂM DANH
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-6">
+                            <p className="text-xs font-medium text-slate-500 font-mono">
+                              {record ? formatDate(record.updatedAt, 'HH:mm:ss') : '--:--:--'}
+                            </p>
+                          </td>
+                          {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || user.role === 'chairperson' || user.role === 'secretary') && (
+                            <td className="py-4 px-6 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {!record ? (
+                                  <div className="flex gap-1">
+                                    <button 
+                                      onClick={() => handleAttendance('present', { uid: u.uid, name: u.name })}
+                                      className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                                    >
+                                      CÓ MẶT
+                                    </button>
+                                    <button 
+                                      onClick={() => handleAttendance('excused', { uid: u.uid, name: u.name })}
+                                      className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-bold hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                                    >
+                                      CÓ PHÉP
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button 
+                                    onClick={() => {
+                                      if (confirm(`Hủy bỏ điểm danh của ${u.name}?`)) {
+                                        meetingService.deleteAttendance(meetingId, u.uid);
+                                      }
+                                    }}
+                                    className="h-8 w-8 rounded-lg bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-100"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -781,9 +920,9 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
               <div className="flex gap-3">
                 <button 
                   onClick={downloadPersonalNote}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-all"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-all font-mono"
                 >
-                  <Download size={18} /> Tải xuống (.txt)
+                  <Download size={18} /> Tải xuống (.doc)
                 </button>
                 <button 
                   onClick={handleSaveNote}

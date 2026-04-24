@@ -111,6 +111,10 @@ export const meetingService = {
     });
   },
 
+  deleteAttendance: async (meetingId: string, userId: string) => {
+    return deleteDoc(doc(db, 'meetings', meetingId, 'attendance', userId));
+  },
+
   // Opinions
   subscribeOpinions: (meetingId: string, callback: (opinions: Opinion[]) => void) => {
     const q = query(collection(db, 'meetings', meetingId, 'opinions'), orderBy('createdAt', 'asc'));
