@@ -26,63 +26,54 @@ export const userService = {
   subscribeAuth: (callback: (user: UserProfile | null) => void) => {
     return onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const email = firebaseUser.email?.toLowerCase();
+        if (!email) {
+          await signOut(auth);
+          callback(null);
+          return;
+        }
+
+        // 1. Try to find by UID first
+        let userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         
-        let profile: UserProfile;
-        
+        // 2. If not found by UID, try to find by Email
+        if (!userDoc.exists()) {
+          userDoc = await getDoc(doc(db, 'users', email));
+        }
+
         if (userDoc.exists()) {
           const data = userDoc.data();
-          profile = {
+          const profile = {
             ...data,
             uid: firebaseUser.uid,
-            // Fallback for migration
-            position: data.position || (data.role === 'admin' ? 'admin' : data.role === 'management' ? 'principal' : 'staff'),
-            role: data.role === 'chairperson' ? 'chairperson' : data.role === 'secretary' ? 'secretary' : 'member'
+            email: email,
           } as UserProfile;
-        } else {
-          // Check if this email was pre-registered or if it's the admin email
-          const q = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
-          const querySnapshot = await getDocs(q);
           
-          if (!querySnapshot.empty) {
-            // Found a pre-registered profile by email
-            const existingDoc = querySnapshot.docs[0];
-            const data = existingDoc.data();
-            // Move it to the UID based document
-            profile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              name: firebaseUser.displayName || data.name || 'User',
-              position: data.position || 'staff',
-              role: data.role || 'member',
-              createdAt: data.createdAt || serverTimestamp()
-            };
+          callback(profile);
+        } else if (email === ADMIN_EMAIL) {
+          // Absolute last resort: bootstrap admin
+          const profile: UserProfile = {
+            uid: firebaseUser.uid,
+            email: email,
+            name: firebaseUser.displayName || 'Admin',
+            position: 'admin',
+            role: 'chairperson',
+            createdAt: serverTimestamp()
+          };
+          // Use try-catch because rules might still block if not careful
+          try {
             await setDoc(doc(db, 'users', firebaseUser.uid), profile);
-          } else if (firebaseUser.email === ADMIN_EMAIL) {
-            // Bootstrap first admin
-            profile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              name: firebaseUser.displayName || 'Admin',
-              position: 'admin',
-              role: 'chairperson',
-              createdAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'users', firebaseUser.uid), profile);
-          } else {
-            // Unregistered user
-            profile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              name: firebaseUser.displayName || 'Guest',
-              position: 'staff',
-              role: 'member',
-              createdAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'users', firebaseUser.uid), profile);
+            callback(profile);
+          } catch (e) {
+            console.error("Admin bootstrap failed", e);
+            await signOut(auth);
+            callback(null);
           }
+        } else {
+          // NOT AUTHORIZED
+          await signOut(auth);
+          callback(null);
         }
-        callback(profile);
       } else {
         callback(null);
       }
@@ -91,7 +82,30 @@ export const userService = {
 
   login: async () => {
     const provider = new GoogleAuthProvider();
-    return signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    const firebaseUser = result.user;
+    const email = firebaseUser.email?.toLowerCase();
+
+    if (!email) {
+      await signOut(auth);
+      throw new Error('Email not found');
+    }
+
+    // Check if authorized
+    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+    if (userDoc.exists()) return result;
+
+    const preDoc = await getDoc(doc(db, 'users', email));
+    if (preDoc.exists()) return result;
+
+    if (email !== ADMIN_EMAIL) {
+      await signOut(auth);
+      const error = new Error('Unauthorized');
+      (error as any).code = 'auth/unauthorized-user';
+      throw error;
+    }
+
+    return result;
   },
 
   logout: async () => {
@@ -121,10 +135,10 @@ export const userService = {
   },
 
   registerUser: async (email: string, name: string, position: UserPosition, role: UserRole, phoneNumber?: string) => {
-    const userRef = doc(collection(db, 'users'));
+    const userRef = doc(db, 'users', email.toLowerCase());
     return setDoc(userRef, {
-      uid: userRef.id,
-      email,
+      uid: email.toLowerCase(),
+      email: email.toLowerCase(),
       name,
       position,
       role,

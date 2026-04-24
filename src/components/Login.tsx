@@ -21,8 +21,10 @@ export default function Login({ onLogin }: LoginProps) {
         setError('Trình duyệt đã chặn cửa sổ đăng nhập. Vui lòng bật cho phép pop-up.');
       } else if (err.code === 'auth/unauthorized-domain') {
         setError('Tên miền này chưa được xác thực trong Firebase Console.');
+      } else if (err.code === 'auth/unauthorized-user') {
+        setError('Email của bạn không nằm trong danh sách được cấp quyền truy cập. Vui lòng liên hệ Quản trị viên.');
       } else {
-        setError('Đã có lỗi xảy ra hoặc bạn chưa được cấp quyền truy cập.');
+        setError('Đã có lỗi xảy ra trong quá trình đăng nhập.');
       }
     } finally {
       setIsLoggingIn(false);

@@ -60,3 +60,9 @@ export interface MeetingDocument {
   uploadedBy: string;
   createdAt: any;
 }
+
+export interface PersonalNote {
+  userId: string;
+  content: string;
+  updatedAt: any;
+}

@@ -20,12 +20,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isEmailVerified() {
-      return request.auth.token.email_verified == true;
-    }
-
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : (exists(/databases/$(database)/documents/users/$(request.auth.token.email))
+          ? get(/databases/$(database)/documents/users/$(request.auth.token.email)).data
+          : {});
     }
 
     function hasPosition(pos) {
@@ -41,15 +41,17 @@ service cloud.firestore {
     }
 
     function isManagement() {
-      return hasPosition('principal') || hasPosition('vice_principal') || isAdmin();
+      let pos = getUserData().get('position', 'staff');
+      return pos == 'principal' || pos == 'vice_principal' || pos == 'admin' || isMasterAdmin();
     }
 
     function isMeetingManager() {
-      return hasRole('chairperson') || hasRole('secretary') || isMasterAdmin();
+      let role = getUserData().get('role', 'member');
+      return role == 'chairperson' || role == 'secretary' || isMasterAdmin();
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isOwner(id) {
+      return isSignedIn() && (request.auth.uid == id || (request.auth.token.email != null && request.auth.token.email == id));
     }
 
     function isValidId(id) {
@@ -68,14 +70,11 @@ service cloud.firestore {
 
     // Rules
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && (
-        isAdmin() || 
-        request.auth.uid == userId // Allow self-registration
-      );
-      allow update: if isAdmin() || 
-                   (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']));
-      allow delete: if isAdmin();
+      allow read: if isSignedIn() && (isAdmin() || isOwner(userId));
+      allow create: if isMasterAdmin() || isAdmin();
+      allow update: if isMasterAdmin() || isAdmin() || 
+                   (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber', 'uid']));
+      allow delete: if isMasterAdmin() || isAdmin();
     }
 
     match /meetings/{meetingId} {
@@ -104,6 +103,10 @@ service cloud.firestore {
         allow read: if isSignedIn();
         allow create: if isManagement();
         allow delete: if isManagement();
+      }
+
+      match /personalNotes/{ownerId} {
+        allow read, write: if isOwner(ownerId) || isMasterAdmin();
       }
     }
   }

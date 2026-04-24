@@ -12,10 +12,48 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
-import { Meeting, Attendance, Opinion, Task, MeetingDocument } from '../types';
+import { Meeting, Attendance, Opinion, Task, MeetingDocument, PersonalNote } from '../types';
 
 export const meetingService = {
-  // ... (existing methods remain same, will replace the whole file for safety)
+  sendInvitations: async (meeting: Partial<Meeting>, participants: string[]) => {
+    try {
+      const response = await fetch('/api/send-invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: meeting.title,
+          scheduledAt: meeting.scheduledAt,
+          location: meeting.location,
+          participants
+        })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error calling send-invitations API:', error);
+      return { status: 'error', error };
+    }
+  },
+
+  // Personal Notes
+  subscribePersonalNote: (meetingId: string, userId: string, callback: (note: PersonalNote | null) => void) => {
+    return onSnapshot(doc(db, 'meetings', meetingId, 'personalNotes', userId), (docSnap) => {
+      if (docSnap.exists()) {
+        callback(docSnap.data() as PersonalNote);
+      } else {
+        callback(null);
+      }
+    });
+  },
+
+  savePersonalNote: async (meetingId: string, userId: string, content: string) => {
+    const ref = doc(db, 'meetings', meetingId, 'personalNotes', userId);
+    return setDoc(ref, {
+      userId,
+      content,
+      updatedAt: serverTimestamp()
+    });
+  },
+
   // Meeting master
   subscribeMeetings: (callback: (meetings: Meeting[]) => void) => {
     const q = query(collection(db, 'meetings'), orderBy('scheduledAt', 'desc'));

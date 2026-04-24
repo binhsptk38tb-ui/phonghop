@@ -22,7 +22,10 @@ import {
   Paperclip,
   Loader2,
   Mic,
-  MicOff
+  MicOff,
+  NotebookPen,
+  Save,
+  Home
 } from 'lucide-react';
 import React from 'react';
 import { meetingService } from '../services/meetingService';
@@ -52,7 +55,7 @@ interface MeetingRoomProps {
   onBack: () => void;
 }
 
-type TabType = 'info' | 'attendance' | 'opinions' | 'tasks' | 'documents';
+type TabType = 'info' | 'attendance' | 'opinions' | 'tasks' | 'documents' | 'notes';
 
 export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProps) {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
@@ -63,6 +66,8 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<MeetingDocument[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [personalNote, setPersonalNote] = useState<string>('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
   
   const [opinionInput, setOpinionInput] = useState('');
   const [showAddDocModal, setShowAddDocModal] = useState(false);
@@ -93,6 +98,9 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
     });
     const unsubTasks = meetingService.subscribeTasks(meetingId, setTasks);
     const unsubDocs = meetingService.subscribeDocuments(meetingId, setDocuments);
+    const unsubPersonalNote = meetingService.subscribePersonalNote(meetingId, user.uid, (note) => {
+      if (note) setPersonalNote(note.content);
+    });
     
     // Load all users to identify roles
     userService.getAllUsers().then(setAllUsers);
@@ -103,8 +111,9 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
       unsubOpinions();
       unsubTasks();
       unsubDocs();
+      unsubPersonalNote();
     };
-  }, [meetingId]);
+  }, [meetingId, user.uid]);
 
   const handleStatusChange = async (status: Meeting['status']) => {
     await meetingService.updateMeeting(meetingId, { status });
@@ -194,31 +203,25 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
           <div class="section">I. NỘI DUNG CUỘC HỌP</div>
           <div class="content">${meeting.content || '........................................................................................................................................................................................................................'}</div>
 
-          <br/>
           <div class="section">II. Ý KIẾN THẢO LUẬN</div>
-          <div class="content">
-            ${opinions.map(op => `<p style="margin: 5px 0;">- <b>${op.userName}:</b> ${op.content}</p>`).join('')}
-            ${opinions.length === 0 ? '<p>........................................................................................................................................................................................................................</p>' : ''}
-          </div>
+          <div class="content">${opinions.map(op => `<p style="margin: 5px 0;">- <b>${op.userName}:</b> ${op.content}</p>`).join('') || 'Không có ý kiến ghi nhận.'}</div>
 
-          <br/>
           <div class="section">III. KẾT LUẬN VÀ QUYẾT NGHỊ</div>
           <div class="content">${meeting.resolution || '........................................................................................................................................................................................................................'}</div>
-
-          <p style="margin-top: 30px;">Cuộc họp kết thúc vào hồi .... giờ .... ngày .... cùng tháng.</p>
-          <p>Biên bản đã được đọc cho các thành viên cùng nghe và nhất trí thông qua.</p>
 
           <table class="signature-table">
             <tr>
               <td style="text-align: center; width: 50%;">
-                <p><b>THƯ KÝ CUỘC HỌP</b></p>
-                <br/><br/><br/>
-                <p><b>${secretary}</b></p>
+                <p style="margin: 0; font-weight: bold;">THƯ KÝ</p>
+                <p style="margin: 0; font-style: italic; font-size: 10pt;">(Ký và ghi rõ họ tên)</p>
+                <div style="height: 100px;"></div>
+                <p style="margin: 0; font-weight: bold;">${secretary}</p>
               </td>
               <td style="text-align: center; width: 50%;">
-                <p><b>CHỦ TỌA CUỘC HỌP</b></p>
-                <br/><br/><br/>
-                <p><b>${chairperson}</b></p>
+                <p style="margin: 0; font-weight: bold;">CHỦ TỌA</p>
+                <p style="margin: 0; font-style: italic; font-size: 10pt;">(Ký và ghi rõ họ tên)</p>
+                <div style="height: 100px;"></div>
+                <p style="margin: 0; font-weight: bold;">${chairperson}</p>
               </td>
             </tr>
           </table>
@@ -230,11 +233,27 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `bien_ban_hop_${meetingId.slice(0, 8)}.doc`;
+    link.download = `Bien_ban_${meeting.title}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleSaveNote = async () => {
+    setIsSavingNote(true);
+    await meetingService.savePersonalNote(meetingId, user.uid, personalNote);
+    setIsSavingNote(false);
+  };
+
+  const downloadPersonalNote = () => {
+    const element = document.createElement("a");
+    const file = new Blob([personalNote], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = `Ghi_chu_${meeting?.title || 'cuoc_hop'}_${user.name}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
   };
 
   const toggleRecording = () => {
@@ -328,8 +347,11 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
 
   const tabs = [
     { id: 'info', label: 'Nội dung', icon: FileText },
-    { id: 'attendance', label: 'Điểm danh', icon: Users },
+    ...(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || user.role === 'chairperson' || user.role === 'secretary' 
+      ? [{ id: 'attendance', label: 'Điểm danh', icon: Users }] 
+      : []),
     { id: 'opinions', label: 'Ý kiến', icon: MessageSquare },
+    { id: 'notes', label: 'Ghi chú', icon: NotebookPen },
     { id: 'tasks', label: 'Nhiệm vụ', icon: CheckSquare },
     { id: 'documents', label: 'Tài liệu', icon: Download },
   ];
@@ -589,15 +611,17 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-                      <Users size={16} />
+                  {(user.position === 'admin' || user.position === 'principal' || user.position === 'vice_principal' || user.role === 'chairperson' || user.role === 'secretary') && (
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <Users size={16} />
+                      </div>
+                      <div className="text-sm">
+                        <p className="font-bold text-slate-900">Thành phần họp</p>
+                        <p className="text-slate-500 font-medium">{attendance.length} thành viên đã điểm danh</p>
+                      </div>
                     </div>
-                    <div className="text-sm">
-                      <p className="font-bold text-slate-900">Thành phần họp</p>
-                      <p className="text-slate-500 font-medium">{attendance.length} thành viên đã điểm danh</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -744,6 +768,40 @@ export default function MeetingRoom({ meetingId, user, onBack }: MeetingRoomProp
                 </div>
               </div>
             </form>
+          </div>
+        )}
+
+        {activeTab === 'notes' && (
+          <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-8">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900">Ghi chú cá nhân</h3>
+                <p className="text-slate-500 font-medium mt-1">Nội dung này chỉ mình bạn thấy và được lưu tự động.</p>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={downloadPersonalNote}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-all"
+                >
+                  <Download size={18} /> Tải xuống (.txt)
+                </button>
+                <button 
+                  onClick={handleSaveNote}
+                  disabled={isSavingNote}
+                  className="flex items-center gap-2 px-6 py-2 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all disabled:opacity-70"
+                >
+                  {isSavingNote ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  Lưu ghi chú
+                </button>
+              </div>
+            </div>
+
+            <textarea
+              value={personalNote}
+              onChange={(e) => setPersonalNote(e.target.value)}
+              placeholder="Ghi lại những lưu ý quan trọng của riêng bạn tại đây..."
+              className="w-full h-[500px] p-6 rounded-2xl bg-slate-50 border border-slate-200 font-medium text-slate-700 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all resize-none"
+            />
           </div>
         )}
 

@@ -1,18 +1,8 @@
 import { useState, useEffect } from 'react';
 import React from 'react';
-import { 
-  Plus, 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  ChevronRight, 
-  Trash2,
-  MoreVertical,
-  Activity,
-  CheckCircle2,
-  AlertCircle
-} from 'lucide-react';
+import { Plus, Calendar, Clock, MapPin, ChevronRight, Trash2, MoreVertical, Activity, CheckCircle2, AlertCircle, Mail } from 'lucide-react';
 import { meetingService } from '../services/meetingService';
+import { userService } from '../services/userService';
 import { Meeting, UserProfile } from '../types';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -42,18 +32,36 @@ export default function Dashboard({ user, onJoinMeeting }: DashboardProps) {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await meetingService.createMeeting({
-      ...newMeeting,
-      scheduledAt: new Date(newMeeting.scheduledAt),
-      createdBy: user.uid
-    });
-    setShowCreateModal(false);
-    setNewMeeting({
-      title: '',
-      description: '',
-      scheduledAt: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-      location: ''
-    });
+    try {
+      const createdMeeting = {
+        ...newMeeting,
+        scheduledAt: new Date(newMeeting.scheduledAt),
+        createdBy: user.uid
+      };
+      
+      const docRef = await meetingService.createMeeting(createdMeeting);
+      
+      // Send invitations
+      const allUsers = await userService.getAllUsers();
+      const participantEmails = allUsers
+        .filter(u => u.email)
+        .map(u => u.email);
+        
+      if (participantEmails.length > 0) {
+        meetingService.sendInvitations(createdMeeting, participantEmails);
+      }
+
+      setShowCreateModal(false);
+      setNewMeeting({
+        title: '',
+        description: '',
+        scheduledAt: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+        location: ''
+      });
+    } catch (error) {
+      console.error('Error creating meeting:', error);
+      alert('Có lỗi xảy ra khi tạo cuộc họp.');
+    }
   };
 
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
